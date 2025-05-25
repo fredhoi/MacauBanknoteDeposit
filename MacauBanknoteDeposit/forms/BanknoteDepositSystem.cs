@@ -1,5 +1,4 @@
 using MacauBanknoteDeposit.Services;
-using MacauBanknoteDeposit.Model;
 using OpenCvSharp;
 using System.Windows.Forms;
 
@@ -8,7 +7,7 @@ namespace MacauBanknoteDeposit.forms
     public partial class BanknoteDepositSystem : Form
     {
         private readonly CameraService _camera;
-        private readonly DetectionService _classifier;
+        private readonly DetectionService _detectionservice;
         private readonly DepositService _depositservice;
         private readonly ReportGenerator _reportGenerator;
 
@@ -17,7 +16,7 @@ namespace MacauBanknoteDeposit.forms
             InitializeComponent();
 
             _camera = new CameraService();
-            _classifier = new DetectionService();
+            _detectionservice = new DetectionService();
             _depositservice = new DepositService();
             _reportGenerator = new ReportGenerator();
 
@@ -29,7 +28,7 @@ namespace MacauBanknoteDeposit.forms
         {
             base.OnFormClosing(e);
             _camera?.Dispose();
-            _classifier?.Dispose();
+            _detectionservice?.Dispose();
         }
     }
 }

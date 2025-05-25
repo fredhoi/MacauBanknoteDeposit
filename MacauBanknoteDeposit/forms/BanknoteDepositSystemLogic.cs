@@ -1,4 +1,6 @@
 using System;
+using MacauBanknoteDeposit.Model;
+using MacauBanknoteDeposit.Services;
 
 namespace MacauBanknoteDeposit.forms
 {
@@ -9,7 +11,7 @@ namespace MacauBanknoteDeposit.forms
             var frame = _camera.GetCurrentFrame();
             if (frame == null) return;
 
-            var result = _classifier.Detect(frame);
+            var result = _detectionservice.Detect(frame);
             lblResults.Text = result.IsValid
                 ? $"檢測到：{result.BanknoteType}\n可信度：{result.Confidence:P0}"
                 : "無法識別";
@@ -17,7 +19,7 @@ namespace MacauBanknoteDeposit.forms
 
         private void ConfirmDeposit()
         {
-            var result = _classifier.LastResult;
+            var result = _detectionservice.LastResult;
             if (BanknoteValidator.IsValid(result))
             {
                 _depositservice.AddDeposit(result.BanknoteType);
@@ -29,10 +31,9 @@ namespace MacauBanknoteDeposit.forms
 
         private void GenerateReport()
         {
-            var report = _reportGenerator.Generate(_depositservice.GetRecords());
-            _reportGenerator.Save(report);
+            var report = _reportGenerator.GenerateReport(_depositservice.GetCurrentRecord());
+            _reportGenerator.SaveReport(report);
             _depositservice.ResetAll();
-            lblTotal.Text = "當前存款總額：MOP 0";
         }
     }
 }

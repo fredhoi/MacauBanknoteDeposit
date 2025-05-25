@@ -1,5 +1,4 @@
 using OpenCvSharp;
-using System;
 using System.Windows.Forms;
 
 namespace MacauBanknoteDeposit.Services
@@ -32,10 +31,20 @@ namespace MacauBanknoteDeposit.Services
 
         public Mat GetCurrentFrame() => _capture?.RetrieveMat();
 
-        public void Dispose()
+        public void Dispose(bool v)
         {
             _timer?.Stop();
             _capture?.Release();
+        }
+
+        internal void Dispose()
+        {
+            throw new NotImplementedException();
+        }
+
+        void IDisposable.Dispose()
+        {
+            Dispose();
         }
     }
 }

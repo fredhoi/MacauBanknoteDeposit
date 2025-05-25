@@ -7,6 +7,8 @@ namespace MacauBanknoteDeposit.Services
     {
         public event System.Action<DepositRecord> DepositUpdated;
 
+        public DepositRecord GetCurrentRecord() => new DepositRecord(_deposits);
+
         private readonly Dictionary<string, int> _deposits = new Dictionary<string, int>
         {
             {"MOP10", 0}, {"MOP20", 0}, {"MOP50", 0},
@@ -32,8 +34,6 @@ namespace MacauBanknoteDeposit.Services
             foreach (var key in _deposits.Keys.ToList())
                 _deposits[key] = 0;
         }
-
-        public DepositRecord GetCurrentRecord() => new DepositRecord(_deposits);
 
         public int TotalAmount => _deposits.Sum(kv =>
             int.Parse(kv.Key.Replace("MOP", "")) * kv.Value);

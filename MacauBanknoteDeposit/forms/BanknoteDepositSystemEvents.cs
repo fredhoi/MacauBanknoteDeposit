@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using OpenCvSharp;
+using OpenCvSharp.Extensions;
 
 namespace MacauBanknoteDeposit.forms
 {
@@ -27,10 +28,24 @@ namespace MacauBanknoteDeposit.forms
 
         private void UpdatePreview(Mat frame)
         {
-            using (var bitmap = OpenCvSharp.Extensions.BitmapConverter.ToBitmap(frame))
+            if (pictureBox.InvokeRequired)
             {
-                pictureBox.Image?.Dispose();
-                pictureBox.Image = (Bitmap)bitmap.Clone();
+                pictureBox.BeginInvoke((MethodInvoker)(() => UpdatePreview(frame)));
+                return;
+            }
+
+            try
+            {
+                // 使用官方转换方法
+                using (var bitmap = BitmapConverter.ToBitmap(frame))
+                {
+                    pictureBox.Image?.Dispose();
+                    pictureBox.Image = (Bitmap)bitmap.Clone();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"畫面更新錯誤: {ex.Message}");
             }
         }
     }
