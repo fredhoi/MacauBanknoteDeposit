@@ -93,7 +93,7 @@ namespace MacauBanknoteDeposit.Services
         {
             try
             {
-                // **使用空白数据预热**
+                // 使用空白數據預熱
                 var dummyInput = new ModelInput
                 {
                     Input = new float[InputSize * InputSize * 3]
@@ -102,7 +102,7 @@ namespace MacauBanknoteDeposit.Services
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("模型预热失败", ex);
+                throw new InvalidOperationException("模型預熱失敗", ex);
             }
         }
 
