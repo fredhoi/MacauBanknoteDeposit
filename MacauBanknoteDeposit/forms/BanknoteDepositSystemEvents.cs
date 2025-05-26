@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using OpenCvSharp;
+using OpenCvSharp.Extensions;
 
 namespace MacauBanknoteDeposit.forms
 {
@@ -27,10 +28,25 @@ namespace MacauBanknoteDeposit.forms
 
         private void UpdatePreview(Mat frame)
         {
-            using (var bitmap = OpenCvSharp.Extensions.BitmapConverter.ToBitmap(frame))
+            if (pictureBox.InvokeRequired)
             {
-                pictureBox.Image?.Dispose();
-                pictureBox.Image = (Bitmap)bitmap.Clone();
+                pictureBox.BeginInvoke(new Action(() => UpdatePreview(frame)));
+                return;
+            }
+
+            try
+            {
+                using (var bitmap = BitmapConverter.ToBitmap(frame))
+                {
+                    // 保留上一幀引用避免立即回收
+                    var oldImage = pictureBox.Image;
+                    pictureBox.Image = (Bitmap)bitmap.Clone();
+                    oldImage?.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"畫面更新錯誤: {ex.Message}");
             }
         }
     }

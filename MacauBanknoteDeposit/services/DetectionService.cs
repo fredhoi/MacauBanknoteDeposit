@@ -1,52 +1,76 @@
-﻿using System;
-using System.IO;
-using Tensorflow;
-using Tensorflow.Keras.Engine;
+﻿using MacauBanknoteDeposit.Extensions;
+using MacauBanknoteDeposit.Model;
+using Microsoft.ML;
+using Microsoft.ML.Data;
+using Microsoft.ML.Transforms.Onnx;
+using Microsoft.ML.OnnxRuntime;
 using OpenCvSharp;
-using static Tensorflow.Binding;
+using System;
+using System.IO;
+using System.Linq;
 
 namespace MacauBanknoteDeposit.Services
 {
-    public class DetectionService : IDisposable
+    public record DetectionService(DetectionResult LastResult, float ConfidenceThreshold) : IDisposable
     {
         private const int InputSize = 224;
-        private const float ConfidenceThreshold = 0.8f;
-
-        private IModel _model;
+        private ITransformer? _onnxModel;
+        private MLContext _mlContext;
+        private PredictionEngine<ModelInput, ModelOutput> _predictionEngine;
         private string[] _labels;
         private bool _disposed;
-
-        public DetectionResult LastResult { get; private set; }
-
-        public DetectionService()
+        public DetectionResult LastResult { get; private set; } = new DetectionResult();
+        public float ConfidenceThreshold { get; } = 0.8f;
+        public DetectionService() : this(default, default)
         {
             LoadModel();
             LoadLabels();
             WarmUpModel();
         }
 
-  
+        // 定義輸入輸出數據結構
+        public class ModelInput
+        {
+            [ColumnName("sequential_17_input")]
+            [VectorType(224 * 224 * 3)]
+            public float[] Input { get; set; }
+        }
+
+        public class ModelOutput
+        {
+            [ColumnName("sequential_19")]
+            public float[] Output { get; set; }
+        }
         private void LoadModel()
         {
-            var modelPath = GetModelPath("keras_model.h5");
+            var modelPath = GetModelPath("model.onnx");
 
-            if (!File.Exists(modelPath))
-                throw new FileNotFoundException($"模型文件不存在：{modelPath}");
+            // 使用 ONNX Runtime 驗證輸入形狀
+            using var session = new InferenceSession(modelPath);
+            var inputMetadata = session.InputMetadata.First();
+            var inputShape = inputMetadata.Value.Dimensions;
+            ValidateInputShape(inputShape);
 
-            try
-            {
-                _model = keras.models.load_model(modelPath);
+            // 初始化 ML.NET Pipeline
+            _mlContext = new MLContext();
+            var pipeline = _mlContext.Transforms.ApplyOnnxModel(
+                modelFile: modelPath,
+                outputColumnNames: new[] { "sequential_19" },
+                inputColumnNames: new[] { "sequential_17_input" }
+            );
 
-                if (_model.inputs[0].shape[1] != InputSize ||
-                    _model.inputs[0].shape[2] != InputSize)
-                {
-                    throw new InvalidOperationException("模型输入尺寸不匹配，预期 224x224");
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException("模型加载失败，请检查模型格式和版本兼容性", ex);
-            }
+            // 擬合模型
+            var data = new[] { new ModelInput { Input = new float[InputSize * InputSize * 3] } };
+            var dataView = _mlContext.Data.LoadFromEnumerable(data);
+            _onnxModel = pipeline.Fit(dataView);
+
+            InitializePredictor();
+        }
+
+        // 預測引擎初始化
+        private void InitializePredictor()
+        {
+            _predictionEngine = _mlContext.Model.CreatePredictionEngine<ModelInput, ModelOutput>(_onnxModel);
         }
 
         private void LoadLabels()
@@ -54,7 +78,7 @@ namespace MacauBanknoteDeposit.Services
             var labelPath = GetModelPath("labels.txt");
 
             if (!File.Exists(labelPath))
-                throw new FileNotFoundException($"标签文件不存在：{labelPath}");
+                throw new FileNotFoundException($"標籤文件不存在：{labelPath}");
 
             _labels = File.ReadAllLines(labelPath);
 
@@ -62,79 +86,97 @@ namespace MacauBanknoteDeposit.Services
                 !_labels[0].StartsWith("MOP") ||
                 !_labels[^1].StartsWith("MOP"))
             {
-                throw new FormatException("标签文件格式错误，应包含6个以MOP开头的面额");
+                throw new FormatException("標籤檔案格式錯誤，應包含6個以MOP開頭的面額");
             }
         }
-
-        private string GetModelPath(string filename)
-        {
-            return Path.Combine(
-                AppDomain.CurrentDomain.BaseDirectory,
-                "Model",
-                filename
-            );
-        }
-
         private void WarmUpModel()
         {
             try
             {
-                using var dummyImage = new Mat(InputSize, InputSize, MatType.CV_8UC3, Scalar.All(0));
-                Detect(dummyImage);
+                // **使用空白数据预热**
+                var dummyInput = new ModelInput
+                {
+                    Input = new float[InputSize * InputSize * 3]
+                };
+                _predictionEngine.Predict(dummyInput);
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("模型预热失败，请检查模型兼容性", ex);
+                throw new InvalidOperationException("模型预热失败", ex);
+            }
+        }
+
+        private string GetModelPath(string filename)
+            => Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Model", filename);
+
+        private void ValidateInputShape(int[] inputShape)
+        {
+            if (inputShape.Length != 4 ||
+                inputShape[1] != InputSize ||  // 高度應為 224
+                inputShape[2] != InputSize ||  // 寬度應為 224
+                inputShape[3] != 3)            // 通道數應為 3
+            {
+                throw new InvalidOperationException(
+                    $"模型輸入形狀應為 [批次, 224, 224, 3] (NHWC 格式)，實際為 [{string.Join(",", inputShape)}]");
             }
         }
 
         public DetectionResult Detect(Mat inputImage)
         {
             if (inputImage.Empty())
-                throw new ArgumentException("输入图像为空");
+                throw new ArgumentException("輸入圖像為空");
 
             try
             {
-                using var processedImage = PreprocessImage(inputImage);
-                var predictions = _model.predict(processedImage)[0].ToArray<float>();
-                LastResult = AnalyzePredictions(predictions);
-                return LastResult;
+                var processedData = PreprocessImage(inputImage);
+                var input = new ModelInput { Input = processedData };
+                var prediction = _predictionEngine.Predict(input);
+                var result = AnalyzePredictions(prediction.Output);
+
+                // 更新 LastResult
+                LastResult = result;
+                return result;
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("纸币检测过程中发生错误", ex);
+                LastResult = new DetectionResult { IsValid = false };
+                throw new InvalidOperationException("紙幣檢測失敗", ex);
             }
+
         }
 
-        private Tensor PreprocessImage(Mat image)
+        private float[] PreprocessImage(Mat image)
         {
-            using var rgbImage = new Mat();
-            using var resizedImage = new Mat();
+            // Step 1: 調整尺寸和顏色空間（BGR → RGB）
+            using var resized = new Mat();
+            Cv2.CvtColor(image, resized, ColorConversionCodes.BGR2RGB);
+            Cv2.Resize(resized, resized, new OpenCvSharp.Size(InputSize, InputSize));
 
-            Cv2.CvtColor(image, rgbImage, ColorConversionCodes.BGR2RGB);
+            // Step 2: 歸一化到 [0, 1] 並轉換為 float[]
+            using var floatMat = new Mat();
+            resized.ConvertTo(floatMat, MatType.CV_32FC3, 1.0 / 255.0);
 
-            Cv2.Resize(rgbImage, resizedImage, new OpenCvSharp.Size(InputSize, InputSize));
-            var tensor = resizedImage.ToTensor()
-                .astype(TF_DataType.TF_FLOAT) / 255.0f;
-            return tf.expand_dims(tensor, 0);
+            // Step 3: 直接提取 HWC 格式數據
+            var hwcData = new float[InputSize * InputSize * 3];
+            unsafe
+            {
+                var ptr = (float*)floatMat.Data;
+                for (int i = 0; i < hwcData.Length; i++)
+                {
+                    hwcData[i] = ptr[i];
+                }
+            }
+
+            return hwcData;
         }
 
         private DetectionResult AnalyzePredictions(float[] predictions)
         {
             if (predictions.Length != _labels.Length)
-                throw new InvalidDataException("预测结果与标签数量不匹配");
+                throw new InvalidDataException("預測結果與標籤數量不匹配");
 
-            var maxIndex = 0;
-            var maxConfidence = predictions[0];
-
-            for (int i = 1; i < predictions.Length; i++)
-            {
-                if (predictions[i] > maxConfidence)
-                {
-                    maxIndex = i;
-                    maxConfidence = predictions[i];
-                }
-            }
+            var maxIndex = Array.IndexOf(predictions, predictions.Max());
+            var maxConfidence = predictions[maxIndex];
 
             return new DetectionResult
             {
@@ -144,34 +186,17 @@ namespace MacauBanknoteDeposit.Services
             };
         }
 
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
 
-        protected virtual void Dispose(bool disposing)
+        public void Dispose()
         {
             if (_disposed) return;
 
-            if (disposing)
-            {
-                _model?.Dispose();
-            }
+            // **释放ML.NET相关资源**
+            _predictionEngine?.Dispose();
+            _onnxModel = null;
 
             _disposed = true;
+            GC.SuppressFinalize(this);
         }
-
-        ~DetectionService()
-        {
-            Dispose(false);
-        }
-    }
-
-    public class DetectionResult
-    {
-        public string BanknoteType { get; set; }
-        public float Confidence { get; set; }
-        public bool IsValid { get; set; }
     }
 }
