@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace MacauBanknoteDeposit.Model
 {
     public class DepositRecord

@@ -1,6 +1,4 @@
 ﻿using MacauBanknoteDeposit.forms;
-using System;
-using System.Windows.Forms;
 
 namespace MacauBanknoteDeposit
 {
@@ -15,7 +13,6 @@ namespace MacauBanknoteDeposit
 
             try
             {
-                // 確保主窗體類名稱正確
                 Application.Run(new BanknoteDepositSystem());
             }
             catch (Exception ex)

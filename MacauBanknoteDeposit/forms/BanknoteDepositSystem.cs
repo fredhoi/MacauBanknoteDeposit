@@ -1,7 +1,5 @@
 using MacauBanknoteDeposit.Model;
 using MacauBanknoteDeposit.Services;
-using OpenCvSharp;
-using System.Windows.Forms;
 
 namespace MacauBanknoteDeposit.forms
 {

@@ -81,7 +81,7 @@ namespace MacauBanknoteDeposit.forms
             {
                 Size = new Size(400, 270),
                 Location = new Point(870, 430),
-                BackColor = Color.LightGray
+                BackColor = Color.Azure
             };
 
             btnConfirm = new Button { Text = "½T»{", Font = new Font("Microsoft JhengHei", 20, FontStyle.Bold), Size = new Size(170, 100), Location = new Point(20, 20) };

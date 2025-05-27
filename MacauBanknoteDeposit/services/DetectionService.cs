@@ -1,13 +1,8 @@
-﻿using MacauBanknoteDeposit.Extensions;
-using MacauBanknoteDeposit.Model;
+﻿using MacauBanknoteDeposit.Model;
 using Microsoft.ML;
 using Microsoft.ML.Data;
-using Microsoft.ML.Transforms.Onnx;
 using Microsoft.ML.OnnxRuntime;
 using OpenCvSharp;
-using System;
-using System.IO;
-using System.Linq;
 
 namespace MacauBanknoteDeposit.Services
 {

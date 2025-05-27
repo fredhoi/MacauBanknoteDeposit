@@ -1,6 +1,4 @@
-﻿using System;
-using MacauBanknoteDeposit.Model;
-using MacauBanknoteDeposit.Services;
+﻿using MacauBanknoteDeposit.Model;
 
 namespace MacauBanknoteDeposit.forms
 {

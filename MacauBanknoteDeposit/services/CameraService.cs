@@ -1,6 +1,5 @@
 using OpenCvSharp;
 using System.Diagnostics;
-using System.Windows.Forms;
 
 namespace MacauBanknoteDeposit.Services
 {
