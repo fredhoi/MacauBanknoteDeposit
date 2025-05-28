@@ -185,8 +185,6 @@ namespace MacauBanknoteDeposit.Services
         public void Dispose()
         {
             if (_disposed) return;
-
-            // **释放ML.NET相关资源**
             _predictionEngine?.Dispose();
             _onnxModel = null;
 
